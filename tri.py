@@ -59,4 +59,4 @@ def daltonize(image_path):
 
 # Example usage
 corrected_image = daltonize("sampletest.jpg")
-corrected_image.save("tri.png")
+corrected_image.save("tri.jpg")

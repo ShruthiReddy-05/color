@@ -65,4 +65,4 @@ def daltonize(image_path, output_path):
     print(f"Processed image saved at: {output_path}")
 
 # Example usage
-daltonize("sampletest.jpg", "deu.png")
+daltonize("sampletest.jpg", "deu.jpg")
