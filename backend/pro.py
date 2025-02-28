@@ -53,4 +53,4 @@ def color_blind_filter(image_path, output_path):
     print(f"Processed image saved at: {output_path}")
 
 # Example usage
-color_blind_filter("sampletest.jpg", "pro.jpg")
+color_blind_filter("assets/sampletest.jpg", "assets/pro.jpg")
