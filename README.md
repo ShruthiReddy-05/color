@@ -34,6 +34,11 @@ Users can **scan or upload** images, select their color blindness type, and view
 
 ---
 
+## Screenshots
+<pre>
+<img src = "https://github.com/ShruthiReddy-05/color/blob/main/assets/input.jpg" width = "250">  <img src = "https://github.com/ShruthiReddy-05/color/blob/main/assets/output.jpg" width = "250">
+</pre>
+
 ## Key Features  
 
 ### 📷 Image Scanning & Uploading  
