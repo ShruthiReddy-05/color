@@ -20,6 +20,8 @@ class _HomePageState extends State<HomePage>
   String selectedType = "protanopia";
   bool _isLoading = false;
   late TabController _tabController;
+  bool _isProcessingCancelled = false;
+  late http.Client _httpClient;
 
   // Color vision deficiency descriptions
   final Map<String, String> deficiencyDescriptions = {
@@ -37,6 +39,7 @@ class _HomePageState extends State<HomePage>
   @override
   void dispose() {
     _tabController.dispose();
+    _httpClient.close();
     super.dispose();
   }
 
@@ -46,7 +49,7 @@ class _HomePageState extends State<HomePage>
       if (pickedFile != null) {
         setState(() {
           _image = File(pickedFile.path);
-          _correctedImage = null; // Reset corrected image
+          _correctedImage = null; // Clear previous corrected image
         });
       }
     } catch (e) {
@@ -72,33 +75,46 @@ class _HomePageState extends State<HomePage>
 
     setState(() {
       _isLoading = true;
+      _isProcessingCancelled = false;
+      _correctedImage = null; // Reset before processing
     });
 
     try {
       var request = http.MultipartRequest(
-          'POST', Uri.parse('http://your-api-url/process'));
+          'POST', Uri.parse('http://192.168.240.28:5000/process'));
       request.files
           .add(await http.MultipartFile.fromPath('image', _image!.path));
       request.fields['type'] = selectedType;
 
       var response = await request.send();
+
+      if (_isProcessingCancelled) {
+        return; // Stop processing if cancelled
+      }
+
       if (response.statusCode == 200) {
         final directory = await getTemporaryDirectory();
-        final filePath = join(directory.path, "corrected_image.jpg");
+
+        // Ensure a unique file name every time to prevent caching issues
+        final filePath = join(directory.path,
+            "corrected_image_${DateTime.now().millisecondsSinceEpoch}.jpg");
         final file = File(filePath);
         final bytes = await response.stream.toBytes();
         await file.writeAsBytes(bytes);
-        setState(() {
-          _correctedImage = file;
-          _tabController.animateTo(1); // Switch to corrected image tab
-        });
 
-        ScaffoldMessenger.of(this.context).showSnackBar(
-          const SnackBar(
-            content: Text('Image processed successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (!_isProcessingCancelled) {
+          setState(() {
+            _correctedImage = file;
+            _tabController.animateTo(1); // Switch to corrected image tab
+          });
+
+          ScaffoldMessenger.of(this.context).showSnackBar(
+            const SnackBar(
+              content: Text('Image processed successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       } else {
         ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(
@@ -108,17 +124,35 @@ class _HomePageState extends State<HomePage>
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to process image: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (!_isProcessingCancelled) {
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to process image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (!_isProcessingCancelled) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  void cancelProcessing() {
+    setState(() {
+      _isProcessingCancelled = true;
+      _isLoading = false;
+    });
+
+    ScaffoldMessenger.of(this.context).showSnackBar(
+      const SnackBar(
+        content: Text('Processing cancelled'),
+        backgroundColor: Colors.orange,
+      ),
+    );
   }
 
   Widget _buildImagePlaceholder() {
@@ -205,7 +239,11 @@ class _HomePageState extends State<HomePage>
             items: ["protanopia", "deuteranopia", "tritanopia"]
                 .map((type) => DropdownMenuItem(
                       value: type,
-                      child: Text(type, style: const TextStyle(fontSize: 16)),
+                      child: Text(
+                        type[0].toUpperCase() +
+                            type.substring(1), // Capitalizing first letter
+                        style: const TextStyle(fontSize: 16),
+                      ),
                     ))
                 .toList(),
           ),
@@ -300,10 +338,19 @@ class _HomePageState extends State<HomePage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Color Vision Assistant"),
+        title: const Text("ClairVue"),
+        titleTextStyle: const TextStyle(
+          color: Colors.white, // Change text color
+          fontSize: 21, // Optional: Change font size
+          fontWeight: FontWeight.bold, // Optional: Change font weight
+        ),
         elevation: 0,
         backgroundColor: Theme.of(context).primaryColor,
         bottom: TabBar(
+          labelColor: const Color.fromARGB(
+              255, 247, 247, 248), // Selected tab text color
+          unselectedLabelColor:
+              const Color.fromARGB(255, 1, 1, 1), // Unselected tab text color
           controller: _tabController,
           tabs: const [
             Tab(text: "Original"),
@@ -489,21 +536,41 @@ class _HomePageState extends State<HomePage>
           if (_isLoading)
             Container(
               color: Colors.black.withOpacity(0.5),
-              child: const Center(
+              child: Center(
                 child: Card(
                   elevation: 8,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text("Processing image...",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        SizedBox(height: 8),
-                        Text("This may take a moment",
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        const Text(
+                          "Processing image...",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "This may take a moment",
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 20),
+                        TextButton(
+                          onPressed: cancelProcessing,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red, // Red text for visibility
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                          ),
+                          child: const Text(
+                            "Cancel",
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ],
                     ),
                   ),
